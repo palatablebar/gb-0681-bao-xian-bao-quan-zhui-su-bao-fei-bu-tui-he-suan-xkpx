@@ -13,12 +13,12 @@ def apply(state):
         issues=[r for r in events if r['kind']=='issue']
         if len(issues)!=1:
             bad.extend((r,'REFERENCE') for r in events);continue
-        base=issues[0];targets={r['id']:r for r in events if r['kind']=='change'};cancelled=set()
+        base=issues[0];targets={r['id']:r for r in events if r['kind']=='change'};cancelled=set();cancels=[]
         for r in events:
             if r['kind']=='cancel':
                 target=targets.get(r['ref'])
                 if target is None or r['effective']<target['effective']:bad.append((r,'REFERENCE'))
-                else:cancelled.add(r['ref'])
+                else:cancelled.add(r['ref']);cancels.append({'id':r['id'],'effective':r['effective']})
         chosen={}
         for r in events:
             if r['kind']!='change' or r['id'] in cancelled:continue
@@ -26,7 +26,7 @@ def apply(state):
             if key in chosen and r['version']==chosen[key]['version'] and r['annual_premium']!=chosen[key]['annual_premium']:
                 raise DomainError('VERSION','同一生效日存在矛盾批单')
             if key not in chosen or Decimal(str(r['version']))>Decimal(str(chosen[key]['version'])):chosen[key]=r
-        policies.append({'id':pid,'base':base,'changes':sorted(chosen.values(),key=lambda x:(x['effective'],x['version'])),'cancelled':sorted(cancelled)})
+        policies.append({'id':pid,'base':base,'changes':sorted(chosen.values(),key=lambda x:(x['effective'],x['version'])),'cancelled':sorted(cancelled),'cancels':sorted(cancels,key=lambda x:x['id'])})
     bad_lines={r['_line'] for r,_ in bad}
     for r,code in bad:state['quarantine'].append({'line':r['_line'],'id':r['id'],'code':code,'raw':r['_raw']})
     state['rows']=[r for r in state['rows'] if r['_line'] not in bad_lines]

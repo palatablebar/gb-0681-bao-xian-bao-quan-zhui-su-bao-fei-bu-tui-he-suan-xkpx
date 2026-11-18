@@ -1,4 +1,5 @@
 from decimal import Decimal,ROUND_DOWN,ROUND_HALF_UP
+from app.modules.m5_calculate import commission
 
 def allocate(values):
     values=[Decimal(str(v)) for v in values]
@@ -10,12 +11,16 @@ def allocate(values):
     return floors
 
 def apply(state):
+    cfg=commission.settings(state)
     calculations=[];total=Decimal(0);paidtotal=Decimal(0)
     for p in state['policies']:
         segments=[s for s in state['segments'] if s['id']==p['id']]
         allocated=allocate([s['exact'] for s in segments]);expected=sum(allocated,Decimal(0))
         paid=sum((Decimal(str(r['paid'])) for r in state['rows'] if r['policy_id']==p['id']),Decimal(0))
         for s,value in zip(segments,allocated):s['premium']=str(value)
-        calculations.append({'id':p['id'],'line':p['base']['_line'],'code':'SUPPLEMENT' if expected>paid else 'REFUND' if expected<paid else 'EVEN','expected':str(expected),'paid':str(paid),'difference':str(expected-paid),'segments':segments})
+        calc={'id':p['id'],'line':p['base']['_line'],'code':'SUPPLEMENT' if expected>paid else 'REFUND' if expected<paid else 'EVEN','expected':str(expected),'paid':str(paid),'difference':str(expected-paid),'segments':segments}
+        calc['commission']=commission.entry(p,calc['difference'],cfg)
+        calculations.append(calc)
         total+=expected;paidtotal+=paid
-    state['calculations']=calculations;state['business']={'total':str(total),'paid':str(paidtotal),'difference':str(total-paidtotal),'unit':'CNY'};return state
+    state['calculations']=calculations
+    state['business']={'total':str(total),'paid':str(paidtotal),'difference':str(total-paidtotal),'unit':'CNY','commission_rate':str(cfg['rate']),**commission.summarize(calculations)};return state
